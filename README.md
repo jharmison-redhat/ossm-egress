@@ -98,6 +98,8 @@ This step locks down the application by first defining explicitly a hostname tha
 
 Note that both services are still available and performing as expected. Feel free to open your local browser to [bookinfo](http://bookinfo.apps-crc.testing/productpage) or [bookinfo-prod](http://bookinfo-prod.apps-crc.testing/productpage) and note that they're both up and running as expected.
 
+Finally, note that although the `bookinfo` productpage pod _thinks_ the connection was reset by a "peer" - it was actually reset by the Envoy proxy pod that's acting as its Sidecar. The packet it tried to send to github.com that got blocked was intercepted and reset before it ever even touched the cluster internal VXLAN network - let alone reaching out to the external service. This is because the policy on this pod is being transparently enforced by that sidecar, and this sort of control over applications wouldn't be possible with virtual machines without complex constructs emulating large amounts of network behavior.
+
 ## Cleanup
 
 If you want to bring the CodeReady Containers instance offline, run the following:
