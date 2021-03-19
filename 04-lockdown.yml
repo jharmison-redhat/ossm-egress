@@ -5,7 +5,7 @@ metadata:
   name: corporate
 spec:
   hosts:
-  - git.jharmison.com
+  - gitlab.com
   ports:
   - number: 443
     name: https
@@ -18,7 +18,7 @@ kind: DestinationRule
 metadata:
   name: corporate
 spec:
-  host: git.jharmison.com
+  host: gitlab.com
   trafficPolicy:
     tls:
       mode: DISABLE

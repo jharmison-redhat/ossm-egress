@@ -9,6 +9,13 @@ bookinfo_deployments=(
     productpage-v1
 )
 
+external_pages=(
+    https://gitlab.com/about/
+    https://github.com
+    http://productpage.bookinfo-prod.svc.cluster.local:9080/productpage
+)
+
+
 function wait_on {
     (
         { set +x ; } &>/dev/null
@@ -34,7 +41,7 @@ function check_connections {
         { set +x ; } &>/dev/null
         productpage_pod=$(oc get pod -l app=productpage -o jsonpath='{.items[0].metadata.name}')
 
-        for url in https://git.jharmison.com https://github.com http://productpage.bookinfo-prod.svc.cluster.local:9080/productpage; do
+        for url in ${external_pages[@]}; do
             oc rsh -c productpage $productpage_pod << EOF
 python -c '
 import requests
