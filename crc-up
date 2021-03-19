@@ -1,0 +1,174 @@
+#!/bin/bash
+
+CRC_CPUS=${CRC_CPUS:-32}
+CRC_MEMORY=${CRC_MEMORY:-59392}
+
+CRC_PULL_SECRET=$HOME/.crc/pull-secret.json
+CRC_HTPASSWD=$HOME/.crc/htpasswd
+CRC_CERT=$HOME/.crc/crc.crt
+CRC_KEY=$HOME/.crc/crc.key
+
+if which formatter &>/dev/null; then
+    # I keep this on my system. If you want, you can install it yourself:
+    #   mkdir -p ~/.local/bin
+    #   curl -o ~/.local/bin/formatter https://raw.githubusercontent.com/solacelost/output-formatter/modern-only/formatter
+    #   chmod +x ~/.local/bin/formatter
+    #   echo "$PATH" | grep -qF "$(realpath ~/.local/bin)" || export PATH="$(realpath ~/.local/bin):$PATH"
+    . $(which formatter)
+else
+    if echo "$*" | grep -qF -- '--formatter'; then
+        mkdir -p ~/.local/bin
+        export PATH=~/.local/bin:"$PATH"
+        curl -o ~/.local/bin/formatter https://raw.githubusercontent.com/solacelost/output-formatter/modern-only/formatter
+        chmod +x ~/.local/bin/formatter
+        . ~/.local/bin/formatter
+    else
+        # These will work as a poor-man's approximation in just a few lines
+        function error_run() {
+            echo -n "$1"
+            shift
+            eval "$@" >&7 2>&1 && echo '  [ SUCCESS ]' || { ret=$? ; echo '  [  ERROR  ]' ; return $ret ; }
+        }
+        function warn_run() {
+            echo -n "$1"
+            shift
+            eval "$@" >&7 2>&1 && echo '  [ SUCCESS ]' || { ret=$? ; echo '  [ WARNING ]' ; return $ret ; }
+        }
+        function wrap() {
+            if [ $# -gt 0 ]; then
+                echo "${@}" | fold -s
+            else
+                fold -s
+            fi
+        }
+    fi
+fi
+
+cd "$(dirname "$(realpath "$0")")"
+
+function on_error {
+    if [ "$DEFAULT" -o "$OPT_START" ]; then
+        warn_run "Removing broken CRC installation" crc delete -f ||:
+    fi
+    echo
+    wrap "Note the --verbose and --log options to produce more useful debugging output."
+    exit $1
+}
+
+trap 'on_error $?' ERR
+
+DEFAULT=true
+OPT_DELETE=''
+OPT_CONFIG=''
+OPT_START=''
+OPT_CERTS=''
+OPT_USERS=''
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --delete)
+            DEFAULT=''
+            OPT_DELETE=true
+            ;;
+        --config)
+            DEFAULT=''
+            OPT_CONFIG=true
+            ;;
+        --start)
+            DEFAULT=''
+            OPT_START=true
+            ;;
+        --certs)
+            DEFAULT=''
+            OPT_CERTS=true
+            ;;
+        --users)
+            DEFAULT=''
+            OPT_USERS=true
+            ;;
+        --log)
+            exec 7>>crc-up.log
+            ;;
+        --verbose)
+            FORMATTER_PAD_RESULT=0
+            exec 7>&2
+            ;;
+        --formatter)
+            : ;;
+        *)
+            echo "Unknown option, '$1'" >&2
+            exit 1
+            ;;
+    esac; shift
+done
+
+error_run "Updating CRC" crc-manager update
+
+if [ "$DEFAULT" -o "$OPT_DELETE" ]; then
+    warn_run "Removing old CRC (if it exists)" crc delete -f ||:
+fi
+
+if [ "$DEFAULT" -o "$OPT_CONFIG" ]; then
+    declare -A crc_settings
+    crc_settings[cpus]=$CRC_CPUS
+    crc_settings[memory]=$CRC_MEMORY
+    if [ -f $CRC_PULL_SECRET ]; then
+        crc_settings[pull-secret-file]=$CRC_PULL_SECRET
+    fi
+    for setting in "${!crc_settings[@]}"; do
+        warn_run "Setting $setting to ${crc_settings[$setting]}" crc config set $setting ${crc_settings[$setting]} ||:
+    done
+    error_run "Updating CRC configuration" crc setup
+fi
+
+if [ "$DEFAULT" -o "$OPT_START" ]; then
+    error_run "Starting CRC" crc start
+    error_run "Setting CRC environment" 'eval $(crc oc-env)'
+    error_run "Logging into CRC" "eval \$(crc console --credentials | awk -F\\' '/admin/ { print \$2 }')"
+fi
+
+if [ "$DEFAULT" -o "$OPT_CERTS" ]; then
+    if [ -r $CRC_CERT -a -r $CRC_KEY ]; then
+        error_run "Loading TLS secrets" oc create secret tls -n openshift-ingress router-certs --cert=$CRC_CERT --key=$CRC_KEY
+        error_run "Applying router certificates" "oc patch ingresscontroller -n openshift-ingress-operator default --type=merge -p '{\"spec\": {\"defaultCertificate\": {\"name\": \"router-certs\"}}}'"
+    fi
+fi
+
+function oauth {
+    oc apply -f - << EOF || return 1
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+  labels:
+    type: htpasswd
+spec:
+  identityProviders:
+  - name: $1
+    mappingMethod: claim
+    type: HTPasswd
+    htpasswd:
+      fileData:
+        name: $1
+EOF
+
+}
+
+if [ "$DEFAULT" -o "$OPT_USERS" ]; then
+    if [ -r $CRC_HTPASSWD ]; then
+        if oc get secret -n openshift-config htpass-secret &>/dev/null; then
+            error_run "Removing existing User secrets" oc delete secret -n openshift-config htpass-secret
+        fi
+        error_run "Loading User secrets" oc create secret generic -n openshift-config htpass-secret --type=htpasswd --from-file=htpasswd=$CRC_HTPASSWD
+        for user in $(cut -d: -f1 $CRC_HTPASSWD); do
+            if ! echo "$user" | grep -q '^#'; then
+                warn_run "Creating a User for $user" oc create user $user ||:
+                error_run "Mapping $user to htpasswd" "oc patch user $user --type=merge -p '{\"identities\": [\"htpass-secret:$user\"]}'"
+                if [ "$(grep -B1 "^$user:" $CRC_HTPASSWD | head -1)" = "#admin" ]; then
+                    error_run "Setting $user as cluster admin" oc adm policy add-cluster-role-to-user cluster-admin $user
+                fi
+            fi
+        done
+        error_run "Patching OAuth" oauth htpass-secret
+    fi
+fi
