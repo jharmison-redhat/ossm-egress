@@ -25,7 +25,7 @@ function wait_on {
             (( timeout -= interval ))
             [ $timeout -gt 0 ] || { printf '\n' ; return 1 ; }
         done
-        printf '\n'
+        printf '.\n'
     )
 }
 
