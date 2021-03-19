@@ -48,21 +48,28 @@ EOF
 }
 
 function finish_deployments {
+    updated=${2:-}
     for deployment in ${bookinfo_deployments[@]}; do
-        wait_on 5 300 "$deployment to be ${1}deployed" "oc get deployment $deployment | grep -qF '1/1'"
+        wait_on 5 300 "$deployment to be ${1:-}deployed" "oc get deployment $deployment | grep -qF '1/1'"
         label=$(oc get deployment $deployment -o jsonpath='{.spec.selector.matchLabels.app}')
-        wait_on 5 300 "$deployment to finish rollout" "oc get pod -l app=$label | grep -qF '2/2'"
+        if [ "$updated" ]; then
+            wait_on 5 300 "$deployment to rollout" "[ \$(oc get pod -l app=$label -o jsonpath='{.items[0].metadata.annotations.kubectl\\.kubernetes\\.io/restartedAt}') = $updated ] && oc get pod -l app=$label | grep -qF '2/2'"
+        else
+            wait_on 5 300 "$deployment to rollout" "oc get pod -l app=$label | grep -qF '2/2'"
+        fi
     done
+    wait_on 5 300 "all old replicas to clear" "[ \$(oc get pod | grep -F 'Terminating' | wc -l) -eq 0 ]"
 }
 
 function update_deployments {
+    updated=$(date -Iseconds)
     for deployment in ${bookinfo_deployments[@]}; do
-        oc patch deployment/$deployment -p '{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt": "'$(date -Iseconds)'"}}}}}'
+        oc patch deployment/$deployment -p '{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt": "'$updated'"}}}}}'
     done
 
-    sleep 5
+    sleep 3
 
-    finish_deployments '(re)'
+    finish_deployments '(re)' $updated
 }
 
 set -ex
