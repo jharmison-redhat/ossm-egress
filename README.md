@@ -58,7 +58,7 @@ One of the deployed copies is under the `bookinfo-prod` namespace, and the other
 
 After the application has finished deploying, a [remote shell](https://docs.openshift.com/container-platform/4.7/support/troubleshooting/investigating-pod-issues.html) is opened to the productpage container in the pod for that microservice (as opposed to the sidecar container on that pod) and that shell is used to validate connectivity to a variety of sites - namely, my own Gitea instance, Github.com, and an alternative ServiceMesh member for which there is no explicit policy allowing access. The externally accesible URL of the alternate deployment would have been accessible, except that there is no good DNS resolution for externally exposed services internal to the cluster in CodeReady Containers, due to the nature of faking DNS in this way. This wouldn't be the case in a production cluster. You should note that all three connections that we test return a status code 200.
 
-If you'd like to visit the [bookinfo](http://bookinfo.apps-crc.testing) or [bookinfo-prod](http://bookinfo-prod.apps-crc.testing) applications, you can. They're relatively simple applications that display a simple productpage with reviews, ratings, and details. The data for each of them is hard-coded, so they're functionally identical.
+If you'd like to visit the [bookinfo](http://bookinfo.apps-crc.testing/productpage) or [bookinfo-prod](http://bookinfo-prod.apps-crc.testing/productpage) applications, you can. They're relatively simple applications that display a simple productpage with reviews, ratings, and details. The data for each of them is hard-coded, so they're functionally identical.
 
 ### 03-sidecar
 
@@ -96,7 +96,7 @@ The default Sidecar policy can be applied at the cluster level and inherited by 
 
 This step locks down the application by first defining explicitly a hostname that lives outside the mesh that it should be able to reach, then configuring the outboundTrafficPolicy on the `Sidecar` resource to only those services explicitly defined (instead of the default, which allows all non-mesh services). After the changes have been successfully rolled out, it conducts the same checks performed before, validating connectivity to a number of URLs. The only URL that should be accesible at this point (and therefore return an HTTP 200) is the explicitly defined `git.jharmison.com` host. You may define policy as tightly or widely scoped as desired, including the use of wildcards in some configurations.
 
-Note that both services are still available and performing as expected. Feel free to open your local browser to [bookinfo](http://bookinfo.apps-crc.testing) or [bookinfo-prod](http://bookinfo-prod.apps-crc.testing) and note that they're both up and running as expected.
+Note that both services are still available and performing as expected. Feel free to open your local browser to [bookinfo](http://bookinfo.apps-crc.testing/productpage) or [bookinfo-prod](http://bookinfo-prod.apps-crc.testing/productpage) and note that they're both up and running as expected.
 
 ## Cleanup
 
