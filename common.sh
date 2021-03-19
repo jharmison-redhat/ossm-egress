@@ -40,8 +40,8 @@ python -c '
 import requests
 try:
     print("$url: " + str(requests.get("$url")))
-except Exception:
-    print("$url: failed")'
+except Exception as e:
+    print("$url: " + str(repr(e)))'
 EOF
         done
     )
