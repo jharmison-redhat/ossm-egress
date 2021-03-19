@@ -70,6 +70,22 @@ This step applies a simple sidecar configuration that only applies egress polici
 
 The only URL that should no longer return a status code 200 is the bookinfo-prod service, which is an internal URL resolvable only inside the cluster. This demonstrates how to isolate namespaces from each other simply using OpenShift Service Mesh. Note that without an egress policy defined for `bookinfo-prod`, or a more restrictive ingress policy defined for `bookinfo`, the reverse would not be true. That is, a connection from `bookinfo-prod` to `bookinfo` would succeed right now.
 
+You can manually run that check, without a script, by doing something like this:
+
+```bash
+eval $(crc oc-env)
+bookinfo_prod_productpage=$(oc -n bookinfo-prod get pod -l app=productpage -o jsonpath='.items[0].metadata.name')
+url=http://productpage.bookinfo.svc.cluster.local:9080/productpage
+oc -n bookinfo-prod -c productpage $bookinfo_prod_productpage << EOF
+python -c '
+import requests
+try:
+    print("$url: " + str(requests.get("$url")))
+except Exception:
+    print("$url: failed")'
+EOF
+```
+
 The default Sidecar policy can be applied at the cluster level and inherited by all Service Mesh members, or it may be applied to projects explicitly (ideally via GitOps), or it may be applied via selector with labels for individual components. RBAC on the `Sidecar` resource inside OpenShift should be used to ensure that although clients may _see_ their Sidecar policy, they may not change it. GitOps workflows would enable them to pull-request a change to their policy into the main repository from which cluster configuration is derived, and pre-designated operations/security/networking personnel could be required reviewers of that change before allowing it to merge, and therefore take effect.
 
 ### 04-lockdown
