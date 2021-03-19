@@ -86,7 +86,7 @@ except Exception:
 EOF
 ```
 
-The default Sidecar policy can be applied at the cluster level and inherited by all Service Mesh members, or it may be applied to projects explicitly (ideally via GitOps), or it may be applied via selector with labels for individual components. RBAC on the `Sidecar` resource inside OpenShift should be used to ensure that although clients may _see_ their Sidecar policy, they may not change it. GitOps workflows would enable them to pull-request a change to their policy into the main repository from which cluster configuration is derived, and pre-designated operations/security/networking personnel could be required reviewers of that change before allowing it to merge, and therefore take effect.
+The default Sidecar policy can be applied at the cluster level and inherited by all Service Mesh members, or it may be applied to projects explicitly (ideally via GitOps), or it may be applied via selector with labels for individual components. RBAC on the `Sidecar` resource inside OpenShift should be used to ensure that although consumers of the platform may _see_ their Sidecar policy, they may not change it. GitOps workflows would enable them to pull-request a change to their policy into the main repository from which cluster configuration is derived, and pre-designated operations/security/networking personnel could be required reviewers of that change before allowing it to merge, and therefore take effect.
 
 ### 04-lockdown
 
